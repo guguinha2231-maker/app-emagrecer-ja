@@ -83,6 +83,10 @@ export default function Home() {
     days: [] as string[]
   })
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
+  const [showCamera, setShowCamera] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Solicitar permissão de notificação
@@ -188,6 +192,15 @@ export default function Home() {
     }
   }, [reminders])
 
+  // Limpar stream da câmera ao desmontar
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [cameraStream])
+
   // Calcular estatísticas diárias
   const getDailyStats = (): DailyStats => {
     const today = new Date().toDateString()
@@ -273,6 +286,63 @@ export default function Home() {
 
   const deleteReminder = (id: string) => {
     setReminders(reminders.filter(r => r.id !== id))
+  }
+
+  // Solicitar acesso à câmera
+  const requestCameraAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      })
+      setCameraStream(stream)
+      setShowCamera(true)
+      
+      // Aguardar o vídeo estar pronto
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        }
+      }, 100)
+    } catch (error) {
+      console.error('Erro ao acessar câmera:', error)
+      alert('Não foi possível acessar a câmera. Verifique as permissões do navegador.')
+    }
+  }
+
+  // Capturar foto da câmera
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(video, 0, 0)
+        const imageData = canvas.toDataURL('image/jpeg')
+        
+        // Parar stream da câmera
+        if (cameraStream) {
+          cameraStream.getTracks().forEach(track => track.stop())
+        }
+        
+        setShowCamera(false)
+        setCapturedImage(imageData)
+        analyzeImage(imageData)
+      }
+    }
+  }
+
+  // Cancelar câmera
+  const cancelCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop())
+    }
+    setShowCamera(false)
+    setCameraStream(null)
+    setCurrentView('home')
   }
 
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -501,6 +571,39 @@ export default function Home() {
     )
   }
 
+  // Modal da Câmera
+  if (showCamera) {
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        <div className="flex-1 relative">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover"
+          />
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
+        
+        <div className="p-6 bg-black/80 flex items-center justify-center gap-4">
+          <button
+            onClick={cancelCamera}
+            className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-bold transition-all"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={capturePhoto}
+            className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-bold transition-all flex items-center gap-2"
+          >
+            <Camera className="w-5 h-5" />
+            Capturar Foto
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Tela Inicial
   if (currentView === 'home') {
     return (
@@ -570,10 +673,7 @@ export default function Home() {
           {/* Menu Principal */}
           <div className="grid grid-cols-2 gap-4">
             <button
-              onClick={() => {
-                setCurrentView('camera')
-                fileInputRef.current?.click()
-              }}
+              onClick={requestCameraAccess}
               className="bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group"
             >
               <Camera className="w-12 h-12 mb-3 mx-auto group-hover:scale-110 transition-transform" />
@@ -1146,7 +1246,7 @@ export default function Home() {
                       </p>
                       <button
                         onClick={requestNotificationPermission}
-                        className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold text-sm transition-all lasy-highlight"
+                        className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold text-sm transition-all"
                       >
                         Ativar Notificações
                       </button>
