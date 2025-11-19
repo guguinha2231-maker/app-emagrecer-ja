@@ -542,7 +542,7 @@ export default function Home() {
                 </div>
 
                 <button className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-3 rounded-xl transition-all duration-300 hover:shadow-lg">
-                  Começar Agora
+                  Assinar Agora
                 </button>
               </div>
             ))}
